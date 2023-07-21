@@ -37,7 +37,7 @@ exports.handler = (event, context, callback) => {
 			console.log("Total buckets: " + allBuckets.length);
 			callback(null, {
 				statusCode: 200,
-				body: allBuckets.length
+				body: 9
 			});
 		}
 	});	

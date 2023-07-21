@@ -3,20 +3,66 @@ Transform: AWS::Serverless-2016-10-31
 Description: An example SAM template for Lambda Safe Deployments.
 
 Resources:
+  CountS3BucketsLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'CountS3BucketsLambdaExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRoleForLambda'
+      Policies:
+        - PolicyName: 's3ListBucketPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 's3:ListAllMyBuckets'
+                Resource: '*'
+
+  PreTrafficHookExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'CountS3BucketsPreTrafficHookExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'codedeployPutLifecycle'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'codedeploy:PutLifecycleEventHookExecutionStatus'
+                Resource:
+                  !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
+        - PolicyName: 'lambdaInvokeFunction'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:InvokeFunction'
+                Resource: !Ref returnS3Buckets.Version
 
   returnS3Buckets:
     Type: AWS::Serverless::Function
     Properties:
       Handler: returnS3Buckets.handler
-      Runtime: nodejs6.10
+      Runtime: nodejs16.x
       AutoPublishAlias: live
-      Policies:
-        - Version: "2012-10-17"
-          Statement: 
-          - Effect: "Allow"
-            Action: 
-              - "s3:ListAllMyBuckets"
-            Resource: '*'
+      Role: !GetAtt CountS3BucketsLambdaExecutionRole.Arn
       DeploymentPreference:
           Type: Linear10PercentEvery1Minute
           Hooks:
@@ -32,21 +78,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: preTrafficHook.handler
-      Policies:
-        - Version: "2012-10-17"
-          Statement: 
-          - Effect: "Allow"
-            Action: 
-              - "codedeploy:PutLifecycleEventHookExecutionStatus"
-            Resource:
-              !Sub 'arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${ServerlessDeploymentApplication}/*'
-        - Version: "2012-10-17"
-          Statement: 
-          - Effect: "Allow"
-            Action: 
-              - "lambda:InvokeFunction"
-            Resource: !Ref returnS3Buckets.Version
-      Runtime: nodejs6.10
+      Role: !GetAtt PreTrafficHookExecutionRole.Arn
+      Runtime: nodejs16.x
       FunctionName: 'CodeDeployHook_preTrafficHook'
       DeploymentPreference:
         Enabled: false
@@ -54,3 +87,5 @@ Resources:
       Environment:
         Variables:
           NewVersion: !Ref returnS3Buckets.Version
+
+
